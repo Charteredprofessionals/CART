@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrainHive — Multi-LLM Brainstorm Chamber</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #2a2a3a;
+    --accent: #f0e040;
+    --accent2: #40e0f0;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --claude: #d4a96a;
+    --chatgpt: #74c98a;
+    --gemini: #7a9ef5;
+    --deepseek: #e07a9e;
+    --qwen: #c07af5;
+    --grok: #f57a7a;
+    --llama: #f5a07a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(240,224,64,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(240,224,64,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 64px 1fr;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* === TOPBAR === */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .topbar-actions { display: flex; align-items: center; gap: 12px; }
+
+  .btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-primary { background: var(--accent); color: #0a0a0f; }
+  .btn-primary:hover { background: #ffe000; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(240,224,64,0.3); }
+
+  /* === SIDEBAR === */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .sidebar-section-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .model-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: 4px;
+  }
+  .model-item:hover { background: var(--card); border-color: var(--border); }
+  .model-item.active { background: var(--card); border-color: var(--border); }
+  .model-item.linked .model-status { background: #2a5; }
+
+  .model-dot {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .model-info { flex: 1; min-width: 0; }
+  .model-name { font-size: 0.82rem; font-weight: 600; }
+  .model-tag { font-size: 0.65rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  .model-toggle {
+    width: 36px; height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .model-toggle.on { background: var(--accent); }
+  .model-toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .model-toggle.on::after { transform: translateX(16px); background: #0a0a0f; }
+
+  .session-item {
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--muted);
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .session-item:hover { background: var(--card); color: var(--text); border-color: var(--border); }
+  .session-item.active { background: var(--card); color: var(--accent); border-color: rgba(240,224,64,0.2); }
+
+  /* === MAIN === */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  .prompt-area {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .prompt-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  .prompt-box { display: flex; gap: 12px; align-items: flex-end; }
+
+  .prompt-input {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    resize: none;
+    min-height: 56px;
+    max-height: 140px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .prompt-input:focus { border-color: var(--accent); }
+  .prompt-input::placeholder { color: var(--muted); }
+
+  .brainstorm-btn {
+    background: var(--accent);
+    color: #0a0a0f;
+    border: none;
+    border-radius: 12px;
+    padding: 0 24px;
+    height: 56px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .brainstorm-btn:hover { background: #ffe000; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(240,224,64,0.35); }
+  .brainstorm-btn:active { transform: translateY(0); }
+  .brainstorm-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .prompt-meta { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+
+  .active-count {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .active-count span { color: var(--accent); font-weight: 600; }
+
+  .mode-pills { display: flex; gap: 6px; }
+
+  .pill {
+    font-size: 0.68rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .pill.active { background: rgba(64,224,240,0.1); border-color: var(--accent2); color: var(--accent2); }
+  .pill:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+  /* === RESULTS === */
+  .results-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+  }
+
+  .empty-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.2; }
+  .empty-title { font-size: 1.5rem; font-weight: 800; color: var(--muted); margin-bottom: 8px; }
+  .empty-sub { font-size: 0.85rem; color: var(--muted); opacity: 0.6; max-width: 360px; line-height: 1.6; }
+
+  .example-prompts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 24px;
+  }
+
+  .example-chip {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .example-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  .question-bubble {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px 16px 20px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    position: relative;
+    margin-top: 8px;
+  }
+
+  .question-bubble::before {
+    content: 'PROMPT';
+    position: absolute;
+    top: -8px;
+    left: 16px;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    background: var(--accent);
+    color: #0a0a0f;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  .response-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+
+  .response-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    animation: cardIn 0.4s ease forwards;
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  @keyframes cardIn { to { opacity: 1; transform: translateY(0); } }
+  .response-card:hover { border-color: var(--muted); transform: translateY(-2px); }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-avatar {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  .card-model-name { font-weight: 700; font-size: 0.82rem; }
+  .card-persona { font-size: 0.68rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-left: auto; }
+
+  .thinking-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .thinking-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .card-body {
+    padding: 14px 16px;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: #c8c8e0;
+    min-height: 80px;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .tag {
+    font-size: 0.6rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .card-actions { display: flex; gap: 6px; }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s;
+  }
+  .icon-btn:hover { color: var(--text); }
+
+  /* Expand modal */
+  .expand-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .expand-overlay.open { display: flex; }
+  .expand-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    max-width: 700px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: cardIn 0.2s ease forwards;
+  }
+  .expand-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+  .expand-modal-body {
+    padding: 20px;
+    font-size: 0.9rem;
+    line-height: 1.75;
+    color: #d8d8f0;
+  }
+
+  .synthesis-card {
+    background: linear-gradient(135deg, rgba(240,224,64,0.05), rgba(64,224,240,0.05));
+    border: 1px solid rgba(240,224,64,0.2);
+    border-radius: 14px;
+    padding: 20px;
+    animation: cardIn 0.5s ease forwards;
+    opacity: 0;
+  }
+
+  .synthesis-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .synthesis-icon { font-size: 1.2rem; }
+  .synthesis-title { font-weight: 800; font-size: 0.9rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  .synthesis-body { font-size: 0.85rem; line-height: 1.7; color: var(--text); }
+
+  /* === SETTINGS MODAL === */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(6px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 520px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: modalIn 0.25s ease;
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+
+  .modal-title { font-weight: 800; font-size: 1.1rem; }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-body { padding: 24px; }
+
+  .security-note {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.6;
+    padding: 12px;
+    background: rgba(240,224,64,0.05);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+  }
+
+  .model-config { display: flex; flex-direction: column; gap: 16px; }
+
+  .model-config-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .model-config-item.connected { border-color: rgba(64,200,96,0.3); }
+
+  .model-config-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+
+  .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .input-group:last-of-type { margin-bottom: 12px; }
+
+  .input-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .input-field {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .input-field:focus { border-color: var(--accent); }
+
+  .connect-btn {
+    background: var(--accent);
+    color: #0a0a0f;
+    border: none;
+    border-radius: 7px;
+    padding: 8px 16px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .connect-btn:hover { background: #ffe000; }
+  .connect-btn.connected {
+    background: rgba(64,200,64,0.15);
+    color: #40e060;
+    border: 1px solid #40e060;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+    border-radius: 6px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  .notification {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 2000;
+    transform: translateY(80px);
+    transition: transform 0.3s ease;
+    max-width: 280px;
+  }
+  .notification.show { transform: translateY(0); }
+  .notification.success { border-color: #40e060; }
+  .notification.error { border-color: var(--grok); }
+
+  .debate-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .debate-message {
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    animation: cardIn 0.4s ease forwards;
+    opacity: 0;
+  }
+  .debate-message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    font-size: 0.78rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">🧠</div>
+      Brain<span>Hive</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-outline" onclick="clearResults()">↺ Clear</button>
+      <button class="btn btn-outline" onclick="exportResults()">⬇ Export</button>
+      <button class="btn btn-primary" onclick="openSettings()">⚙ Link Accounts</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-section-title">AI Models</div>
+      <div id="modelList"></div>
+    </div>
+
+    <div>
+      <div class="sidebar-section-title">Brainstorm Mode</div>
+      <div class="model-item active" onclick="setMode('parallel')" id="mode-parallel">
+        <div class="model-dot" style="background:rgba(240,224,64,0.15);color:var(--accent)">⚡</div>
+        <div class="model-info">
+          <div class="model-name">Parallel</div>
+          <div class="model-tag">All respond independently</div>
+        </div>
+      </div>
+      <div class="model-item" onclick="setMode('debate')" id="mode-debate">
+        <div class="model-dot" style="background:rgba(64,224,240,0.15);color:var(--accent2)">⚔</div>
+        <div class="model-info">
+          <div class="model-name">Debate</div>
+          <div class="model-tag">Models challenge each other</div>
+        </div>
+      </div>
+      <div class="model-item" onclick="setMode('synthesize')" id="mode-synthesize">
+        <div class="model-dot" style="background:rgba(160,120,255,0.15);color:#a078ff">✦</div>
+        <div class="model-info">
+          <div class="model-name">Synthesize</div>
+          <div class="model-tag">Combine into one answer</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div>
+      <div class="sidebar-section-title">Recent Sessions</div>
+      <div class="session-item active">🚀 SaaS product naming</div>
+      <div class="session-item">📊 Marketing strategy Q4</div>
+      <div class="session-item">💡 App feature brainstorm</div>
+      <div class="session-item">🔬 Research methodology</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="prompt-area">
+      <div class="prompt-label">Brainstorm Prompt</div>
+      <div class="prompt-box">
+        <textarea class="prompt-input" id="promptInput" rows="2"
+          placeholder="Ask anything — all your AI models will brainstorm simultaneously..."
+          onkeydown="handleKey(event)"></textarea>
+        <button class="brainstorm-btn" id="fireBtn" onclick="runBrainstorm()">
+          ⚡ Fire
+        </button>
+      </div>
+      <div class="prompt-meta">
+        <div class="active-count"><span id="activeCount">5</span> models active</div>
+        <div class="mode-pills">
+          <div class="pill active" id="pill-parallel" onclick="setMode('parallel')">Parallel</div>
+          <div class="pill" id="pill-debate" onclick="setMode('debate')">Debate</div>
+          <div class="pill" id="pill-synthesize" onclick="setMode('synthesize')">Synthesize</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="results-area" id="resultsArea">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">🧠</div>
+        <div class="empty-title">The Hive Awaits</div>
+        <div class="empty-sub">Type a question or task and all your linked AI models will brainstorm together, each from their unique perspective.</div>
+        <div class="example-prompts">
+          <div class="example-chip" onclick="useExample(this)">Name my SaaS startup</div>
+          <div class="example-chip" onclick="useExample(this)">Best way to learn Rust in 30 days</div>
+          <div class="example-chip" onclick="useExample(this)">Marketing strategy for zero budget</div>
+          <div class="example-chip" onclick="useExample(this)">Explain quantum entanglement simply</div>
+          <div class="example-chip" onclick="useExample(this)">Ideas for a solo indie game</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- EXPAND MODAL -->
+<div class="expand-overlay" id="expandOverlay" onclick="closeExpand(event)">
+  <div class="expand-modal">
+    <div class="expand-modal-header">
+      <div id="expandTitle" style="font-weight:700"></div>
+      <button class="modal-close" onclick="document.getElementById('expandOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="expand-modal-body" id="expandBody"></div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settingsModal" onclick="handleModalClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚙ Link Your AI Accounts</div>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="security-note">
+        🔒 Your credentials are stored locally in your browser and never sent to BrainHive servers. BrainHive uses secure browser sessions to access your linked accounts on your behalf.
+      </div>
+      <div class="model-config" id="modelConfig"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Notification -->
+<div class="notification" id="notification">
+  <span id="notifIcon">✓</span>
+  <span id="notifText"></span>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const MODELS = [
+  { id: 'claude',   name: 'Claude',   icon: '🟠', color: '#d4a96a', tag: 'Anthropic', persona: 'Analytical',  linked: true  },
+  { id: 'chatgpt',  name: 'ChatGPT',  icon: '🟢', color: '#74c98a', tag: 'OpenAI',    persona: 'Creative',    linked: true  },
+  { id: 'gemini',   name: 'Gemini',   icon: '🔵', color: '#7a9ef5', tag: 'Google',    persona: 'Research',    linked: true  },
+  { id: 'deepseek', name: 'DeepSeek', icon: '🟣', color: '#e07a9e', tag: 'DeepSeek',  persona: 'Technical',   linked: false },
+  { id: 'qwen',     name: 'Qwen',     icon: '🟡', color: '#c07af5', tag: 'Alibaba',   persona: 'Systematic',  linked: true  },
+  { id: 'grok',     name: 'Grok',     icon: '🔴', color: '#f57a7a', tag: 'xAI',       persona: 'Contrarian',  linked: true  },
+  { id: 'llama',    name: 'Llama',    icon: '🟤', color: '#f5a07a', tag: 'Meta',      persona: 'Pragmatic',   linked: false },
+];
+
+// FIX: All responses now keyed by model id, with a 'default' fallback object
+const SAMPLE_RESPONSES = {
+  'name my saas startup': {
+    claude:   "From an analytical standpoint, the strongest startup names share three qualities: brevity (under 8 chars), brandability, and domain availability. I'd suggest **Zentry** (centralization + entry point), **Veloq** (velocity + quick), or **Nubra** (cloud + branch). Zentry performs best semantically — it communicates a hub or platform without being overly literal. Run trademark searches on all candidates before committing.",
+    chatgpt:  "Let's get creative! **Fluxio** is dynamic and modern — sounds like it flows and adapts. Or **Sparq** for something punchy. If you want playful-professional: **Driftly**. For serious enterprise vibes: **Coreon**. My top pick is **Fluxio** — easy to pronounce in any language, the .io domain reads as tech-native, and it has built-in metaphorical flexibility for any direction you take the product.",
+    gemini:   "Names ending in '-ly' or '-io' show 23% higher recall in brand studies. Cross-referencing trademark databases and domain availability: **Lattio** (lattice + io, implies structure and SaaS credibility), **Omnex** (omni + next), or **Klyro** (clarity + flow). SEO analysis shows 'Lattio' has near-zero indexed competition. Consider also multilingual neutrality — all three pass a 12-language phonetic check.",
+    qwen:     "Systematic approach: define core value proposition before naming. Productivity tool → **Taskiro**. Data platform → **Datavyn**. Communication tool → **Meshly**. Finance tool → **Ledgra**. The name should encode function without being too literal. Evaluate all candidates through a 5-point rubric: pronunciation, memorability, domain availability, trademark clearance, and global phonetic neutrality.",
+    grok:     "Hot take: everyone's naming their startup like they're allergic to vowels. Instead of Fluxio or Zentry, go human. **Strand** isn't taken — as in thread of work, narrative. Or lean into the absurd: call it something totally unexpected like **Obvious** — because nobody actually does the thing the name says. Differentiation beats optimization for recall in crowded markets.",
+    llama:    "Pragmatic view: what's your runway and target market? Enterprise buyers distrust clever names; they want gravitas. Consumer apps need memorability. B2B → **Arcton**, **Vantrel**, **Korvex**. B2C → **Zestify**, **Popiq**, **Loopie**. Don't over-optimize on naming before validating the product. Ship first, rebrand later if needed — many successful companies started with placeholder names.",
+    deepseek: "Technical assessment: from an NLP and linguistic perspective, optimal brand names satisfy phonological distinctiveness (unique phoneme combinations), morphological simplicity (1-2 syllables preferred), and semantic openness (no fixed meaning that constrains future pivots). Candidates: **Axevo** (no semantic baggage, phonetically distinctive), **Norvik** (Nordic connotations suggest reliability), **Quill** (simple, evocative, expandable metaphor).",
+  },
+  'learn rust': {
+    claude:   "A structured 30-day Rust curriculum: Week 1 — ownership, borrowing, and lifetimes (the hardest part — get this right). Week 2 — structs, enums, pattern matching, and error handling with Result/Option. Week 3 — traits, generics, and iterators. Week 4 — async/await, threading, and building a real CLI tool. The Rust Book (free online) plus Rustlings exercises are the gold standard resources. Don't skip Chapter 4.",
+    chatgpt:  "Rust in 30 days is ambitious but doable! Start with **Rustlings** (interactive exercises) for the first week. Days 8-14: build something tiny — a file parser, a CLI calculator. Days 15-21: tackle ownership edge cases, smart pointers (Box, Rc, Arc). Days 22-30: write a small web server with Actix or Axum. The key insight: stop fighting the borrow checker and start asking WHY it's rejecting your code.",
+    gemini:   "Research-backed learning path: studies show project-based learning accelerates Rust adoption by 40% vs. reading-only approaches. Recommended stack: The Rust Book → Rustlings → Zero To Production in Rust (for web) or Rust for Rustaceans (for systems). Key milestone: when you understand why `String` and `&str` are different types, you've crossed the conceptual threshold. Budget 2-3 hours/day for meaningful progress.",
+    qwen:     "Systematic 30-day schedule: Days 1-5 setup and syntax basics. Days 6-10 ownership model deep dive. Days 11-15 compound types and pattern matching. Days 16-20 traits and generics. Days 21-25 concurrency primitives. Days 26-30 capstone project. Track progress with daily check-ins. Use cargo clippy and cargo fmt from day 1 — they teach idiomatic Rust passively.",
+    grok:     "Counterpoint: don't try to learn Rust like you learned Python. Rust forces you to think about memory at every step. That's a feature, not a bug. My honest advice: spend the first week just reading error messages and understanding them fully. The compiler error messages in Rust are the best documentation you'll ever read. They literally tell you what to fix.",
+    llama:    "Realistic 30-day plan for someone with prior programming experience: expect to spend 60% of your time in Week 1-2 genuinely confused. That's normal. The payoff is real — Rust's safety guarantees eliminate entire classes of bugs. Focus on one concept per day, write small programs, and don't try to write idiomatic Rust from day one. Getting it working is more important than getting it elegant early.",
+    deepseek: "From a compiler theory perspective, Rust's borrow checker implements a form of affine type system. Understanding this theoretically accelerates practical learning. Key mental model: every value has exactly one owner, and borrows are compile-time-checked references with defined lifetimes. Recommended reading alongside The Book: 'Programming Rust' by Blandy & Orendorff for deeper theory. Use `cargo expand` to understand macro expansion.",
+  },
+};
+
+// FIX: Proper default responses used when no keyword matches
+const DEFAULT_RESPONSES = {
+  claude:   "Approaching this methodically: the most robust solution requires examining core assumptions before proposing an answer. I'd structure this in phases — first clarify the goal and constraints, then map the solution space, then evaluate options against a clear rubric. The strongest answer accounts for edge cases while maintaining clarity of principle. My recommendation is to pilot the approach before full commitment to validate assumptions with real data.",
+  chatgpt:  "Great question! I see this as an opportunity to think differently. The creative angle is to flip the conventional wisdom — instead of solving the obvious problem, what if we reframe the question? Three directions emerge immediately, each with distinct upside. The key is iteration and not being afraid to experiment early. I'd start with the simplest version that could work, launch it, and use real feedback to guide the next step.",
+  gemini:   "Drawing from research and data: the evidence-based approach shows a multi-pronged strategy is most effective here. Relevant studies suggest 40-60% improvement when key variables are optimized in sequence. The recommendation involves a structured methodology adaptable to your specific context while maintaining scientific rigor. Cross-referencing multiple sources, there's strong consensus on the foundational approach even where details diverge.",
+  deepseek: "From a technical architecture perspective: optimal solution requires careful decomposition of the problem space. Analyzing complexity, the most efficient path involves modular components with clear interface boundaries. Implementation should prioritize testability and separation of concerns. Consider the long-term maintenance burden alongside initial development cost — systems that are clever but opaque create compounding technical debt.",
+  qwen:     "Systematic analysis yields a structured framework: (1) Define success metrics before proceeding. (2) Identify key dependencies and blockers. (3) Create decision tree for branching scenarios. (4) Establish feedback loops for course correction. (5) Document assumptions explicitly. This 5-point system ensures nothing falls through the cracks and produces reproducible, auditable outcomes that can be improved over time.",
+  grok:     "Counterpoint to the above: we might be overcomplicating this. The simplest explanation is usually correct, and the simplest solution usually works. Strip away the jargon — what are you actually trying to achieve? Trust your instincts, move fast. Overthinking is often the real enemy. Ship something, see what breaks, fix it. Speed beats perfection in practice, especially at early stages where assumptions haven't been validated.",
+  llama:    "Pragmatic view: what resources do you actually have? Theoretical ideals are irrelevant if they require capabilities or budget out of reach. Map your constraints first, then backtrack to the best feasible solution within those bounds. Practical tradeoffs matter more than optimal theory. Start with what you can execute today, learn from that, and iterate toward the ideal solution rather than trying to build it all at once.",
+};
+
+const SYNTHESIS = {
+  'name my saas startup': "Consensus across models: prioritize short, pronounceable names with available .io/.com domains. Top cross-model recommendation: **Lattio** (Gemini's research-backed pick, validated by Claude's analytical framework) or **Fluxio** (ChatGPT's creative pick, supported by Qwen's systematic rubric). DeepSeek adds valuable linguistic rigor — **Axevo** is the dark horse. Grok's contrarian point raises valid concern about differentiation: avoid names that sound like every other SaaS tool. Run all finalists through trademark search and native speaker pronunciation tests in your key markets.",
+  'learn rust': "Consensus: Rust requires a 2-3 hour/day commitment for 30 days to reach genuine competency. All models agree: Week 1 on ownership is the critical foundation — rushing past it costs more time later. Cross-model recommendation: **The Rust Book** + **Rustlings** for foundations, then immediately move to building something real. Grok's insight about reading compiler errors is underrated — Rust's errors are the best inline documentation in any language. Qwen's structured schedule combined with ChatGPT's project-first philosophy is the optimal blend.",
+  default: "The models converge on a phased, iterative approach — though they differ on emphasis. Claude and Gemini prioritize structured methodology and evidence; ChatGPT and Grok advocate speed and creative reframing; Qwen adds systematic scaffolding; DeepSeek grounds it in technical rigor; Llama enforces pragmatic constraint. The synthesis: use Qwen's framework as a skeleton, execute at ChatGPT's pace, apply Claude's analytical checkpoints at each phase gate, and use Grok's contrarian lens as a final sanity check against over-engineering.",
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  mode: 'parallel',
+  models: MODELS.map(m => ({ ...m, enabled: m.linked })),
+  sessionCount: 0,  // FIX: used to generate unique IDs per brainstorm session
+  isRunning: false,
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getActiveModels() {
+  return state.models.filter(m => m.enabled && m.linked);
+}
+
+function updateActiveCount() {
+  document.getElementById('activeCount').textContent = getActiveModels().length;
+}
+
+// FIX: Proper markdown renderer that doesn't break on edge cases
+function renderMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+function showNotification(text, type = 'success') {
+  const el = document.getElementById('notification');
+  document.getElementById('notifText').textContent = text;
+  document.getElementById('notifIcon').textContent = type === 'success' ? '✓' : '⚠';
+  el.className = `notification ${type} show`;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// FIX: Find sample key matching prompt (case-insensitive substring match)
+function findSampleKey(prompt) {
+  const p = prompt.toLowerCase();
+  return Object.keys(SAMPLE_RESPONSES).find(k => p.includes(k)) || null;
+}
+
+// ============================================================
+// RENDER MODEL LIST
+// ============================================================
+function renderModelList() {
+  const el = document.getElementById('modelList');
+  el.innerHTML = state.models.map(m => {
+    // FIX: build onclick as data attribute to avoid template literal quoting hell
+    const toggleAttr = m.linked
+      ? `onclick="toggleModel('${m.id}')" title="Toggle ${m.name}"`
+      : `onclick="openSettings()" title="Link ${m.name}"`;
+    return `
+      <div class="model-item ${m.linked ? 'linked' : ''}">
+        <div class="model-dot" style="background:${m.color}20;color:${m.color}">${m.icon}</div>
+        <div class="model-info">
+          <div class="model-name">${m.name}</div>
+          <div class="model-tag">${m.tag} · ${m.persona}</div>
+        </div>
+        ${m.linked
+          ? `<div class="model-toggle ${m.enabled ? 'on' : ''}" ${toggleAttr}></div>`
+          : `<div style="font-size:0.65rem;color:var(--muted);cursor:pointer" ${toggleAttr}>Link</div>`
+        }
+      </div>`;
+  }).join('');
+  updateActiveCount();
+}
+
+// ============================================================
+// RENDER SETTINGS
+// ============================================================
+function renderSettingsModal() {
+  const el = document.getElementById('modelConfig');
+  el.innerHTML = state.models.map(m => `
+    <div class="model-config-item ${m.linked ? 'connected' : ''}" id="cfg-${m.id}">
+      <div class="model-config-header">
+        <div style="width:30px;height:30px;border-radius:8px;background:${m.color}20;color:${m.color};display:flex;align-items:center;justify-content:center;font-size:0.9rem">${m.icon}</div>
+        <div>
+          <div style="font-weight:700;font-size:0.85rem">${m.name}</div>
+          <div style="font-size:0.68rem;color:var(--muted)">${m.tag}</div>
+        </div>
+        <button class="connect-btn ${m.linked ? 'connected' : ''}" id="cbtn-${m.id}"
+          style="margin-left:auto" onclick="toggleLink('${m.id}')">
+          ${m.linked ? '✓ Connected' : 'Connect'}
+        </button>
+      </div>
+      <div class="input-group">
+        <div class="input-label">Email / Username</div>
+        <input class="input-field" type="text" id="email-${m.id}"
+          placeholder="your@email.com" value="${m.linked ? 'user@example.com' : ''}">
+      </div>
+      <div class="input-group">
+        <div class="input-label">Password</div>
+        <input class="input-field" type="password" id="pass-${m.id}"
+          placeholder="••••••••" value="${m.linked ? 'stored_securely' : ''}">
+      </div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// TOGGLE MODEL (sidebar)
+// ============================================================
+function toggleModel(id) {
+  const m = state.models.find(x => x.id === id);
+  if (!m || !m.linked) return;
+  m.enabled = !m.enabled;
+  renderModelList();
+}
+
+// ============================================================
+// TOGGLE LINK (settings)
+// ============================================================
+function toggleLink(id) {
+  const m = state.models.find(x => x.id === id);
+  if (!m) return;
+  m.linked = !m.linked;
+  m.enabled = m.linked;
+
+  const btn = document.getElementById('cbtn-' + id);
+  const cfg = document.getElementById('cfg-' + id);
+  if (btn) {
+    btn.textContent = m.linked ? '✓ Connected' : 'Connect';
+    btn.className = 'connect-btn ' + (m.linked ? 'connected' : '');
+  }
+  if (cfg) cfg.className = 'model-config-item ' + (m.linked ? 'connected' : '');
+
+  renderModelList();
+  showNotification(m.linked ? `${m.name} connected!` : `${m.name} disconnected`, m.linked ? 'success' : 'error');
+}
+
+// ============================================================
+// MODE SWITCHING — FIX: no circular calls
+// ============================================================
+function setMode(mode) {
+  state.mode = mode;
+  ['parallel', 'debate', 'synthesize'].forEach(m => {
+    document.getElementById('mode-' + m).classList.toggle('active', m === mode);
+    document.getElementById('pill-' + m).classList.toggle('active', m === mode);
+  });
+}
+
+// ============================================================
+// PROMPT HANDLING
+// ============================================================
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    runBrainstorm();
+  }
+}
+
+function useExample(el) {
+  document.getElementById('promptInput').value = el.textContent;
+  document.getElementById('promptInput').focus();
+}
+
+// ============================================================
+// CLEAR & EXPORT
+// ============================================================
+function clearResults() {
+  const area = document.getElementById('resultsArea');
+  area.innerHTML = `
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🧠</div>
+      <div class="empty-title">The Hive Awaits</div>
+      <div class="empty-sub">Type a question or task and all your linked AI models will brainstorm together, each from their unique perspective.</div>
+      <div class="example-prompts">
+        <div class="example-chip" onclick="useExample(this)">Name my SaaS startup</div>
+        <div class="example-chip" onclick="useExample(this)">Best way to learn Rust in 30 days</div>
+        <div class="example-chip" onclick="useExample(this)">Marketing strategy for zero budget</div>
+        <div class="example-chip" onclick="useExample(this)">Explain quantum entanglement simply</div>
+        <div class="example-chip" onclick="useExample(this)">Ideas for a solo indie game</div>
+      </div>
+    </div>`;
+}
+
+function exportResults() {
+  const area = document.getElementById('resultsArea');
+  const content = '# BrainHive Session Export\n' +
+    new Date().toLocaleString() + '\n\n' +
+    area.innerText;
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'brainhive-session-' + Date.now() + '.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showNotification('Session exported!', 'success');
+}
+
+// ============================================================
+// EXPAND MODAL
+// ============================================================
+function expandResponse(modelName, contentHtml) {
+  document.getElementById('expandTitle').textContent = modelName + ' — Full Response';
+  document.getElementById('expandBody').innerHTML = contentHtml;
+  document.getElementById('expandOverlay').classList.add('open');
+}
+
+function closeExpand(e) {
+  if (e.target === document.getElementById('expandOverlay')) {
+    document.getElementById('expandOverlay').classList.remove('open');
+  }
+}
+
+// ============================================================
+// COPY
+// ============================================================
+function copyResponse(sessionId, modelId) {
+  // FIX: use session-scoped IDs to avoid stale references
+  const el = document.getElementById('body-' + sessionId + '-' + modelId);
+  if (el) {
+    navigator.clipboard.writeText(el.innerText)
+      .then(() => showNotification('Copied to clipboard!', 'success'))
+      .catch(() => showNotification('Copy failed — try manually selecting text', 'error'));
+  }
+}
+
+// ============================================================
+// MAIN BRAINSTORM RUNNER
+// ============================================================
+function runBrainstorm() {
+  const prompt = document.getElementById('promptInput').value.trim();
+  if (!prompt) {
+    showNotification('Please enter a prompt first', 'error');
+    return;
+  }
+
+  const activeModels = getActiveModels();
+  if (activeModels.length === 0) {
+    showNotification('No models linked! Open Account Settings.', 'error');
+    return;
+  }
+
+  if (state.isRunning) return;
+
+  state.isRunning = true;
+  document.getElementById('fireBtn').disabled = true;
+  document.getElementById('promptInput').value = '';
+
+  // FIX: increment session counter so all IDs are unique across multiple runs
+  state.sessionCount++;
+  const sid = state.sessionCount;
+
+  const resultsArea = document.getElementById('resultsArea');
+  document.getElementById('emptyState')?.remove();
+
+  // Question bubble
+  const qBubble = document.createElement('div');
+  qBubble.className = 'question-bubble';
+  qBubble.textContent = prompt;
+  resultsArea.appendChild(qBubble);
+
+  // Find matching responses
+  const sampleKey = findSampleKey(prompt);
+  const sampleResponses = sampleKey ? SAMPLE_RESPONSES[sampleKey] : null;
+
+  if (state.mode === 'debate') {
+    runDebateMode(sid, activeModels, prompt, sampleResponses, resultsArea);
+  } else {
+    runParallelMode(sid, activeModels, prompt, sampleResponses, resultsArea, sampleKey);
+  }
+}
+
+// ============================================================
+// PARALLEL / SYNTHESIZE MODE
+// ============================================================
+function runParallelMode(sid, activeModels, prompt, sampleResponses, resultsArea, sampleKey) {
+  const grid = document.createElement('div');
+  grid.className = 'response-grid';
+  resultsArea.appendChild(grid);
+
+  // FIX: track response times for correct synthesis timing
+  const delays = [];
+
+  activeModels.forEach((m, i) => {
+    const delay = 900 + Math.random() * 2200;
+    delays.push(delay);
+
+    const card = document.createElement('div');
+    card.className = 'response-card';
+    card.style.animationDelay = (i * 0.08) + 's';
+
+    // FIX: use session-scoped IDs
+    const bodyId = 'body-' + sid + '-' + m.id;
+    const thinkId = 'think-' + sid + '-' + m.id;
+    const tagsId = 'tags-' + sid + '-' + m.id;
+
+    card.innerHTML = `
+      <div class="card-header" style="border-left:3px solid ${m.color}">
+        <div class="card-avatar" style="background:${m.color}20;color:${m.color}">${m.icon}</div>
+        <div>
+          <div class="card-model-name" style="color:${m.color}">${m.name}</div>
+          <div style="font-size:0.65rem;color:var(--muted)">${m.tag}</div>
+        </div>
+        <div class="card-persona">${m.persona}</div>
+        <div class="thinking-badge" id="${thinkId}">
+          <div class="thinking-dot"></div> thinking
+        </div>
+      </div>
+      <div class="card-body" id="${bodyId}">
+        <div class="skeleton" style="height:14px;width:90%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:14px;width:80%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:14px;width:95%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:14px;width:70%"></div>
+      </div>
+      <div class="card-footer">
+        <div class="card-tags" id="${tagsId}"></div>
+        <div class="card-actions">
+          <button class="icon-btn" title="Copy" onclick="copyResponse(${sid}, '${m.id}')">⎘</button>
+          <button class="icon-btn" title="Expand" onclick="expandResponse('${m.name}', document.getElementById('${bodyId}').innerHTML)">⤢</button>
+        </div>
+      </div>`;
+
+    grid.appendChild(card);
+
+    // FIX: get response text safely with proper fallback chain
+    setTimeout(() => {
+      const bodyEl = document.getElementById(bodyId);
+      const thinkEl = document.getElementById(thinkId);
+      const tagsEl = document.getElementById(tagsId);
+
+      if (!bodyEl) return; // guard against cleared results
+
+      thinkEl.innerHTML = '<span style="color:#40e060;font-size:0.65rem">✓ done</span>';
+
+      // FIX: proper fallback chain — named sample → default named → DEFAULT_RESPONSES → generic
+      const respText = (sampleResponses && sampleResponses[m.id])
+        || DEFAULT_RESPONSES[m.id]
+        || "Response generated for this prompt. This model analyzed the question from its unique perspective and produced a contextual answer.";
+
+      bodyEl.innerHTML = renderMarkdown(respText);
+      tagsEl.innerHTML = `<span class="tag">${state.mode}</span><span class="tag">${m.persona.toLowerCase()}</span>`;
+    }, delay);
+  });
+
+  // Synthesis card (only in synthesize mode)
+  if (state.mode === 'synthesize') {
+    const maxDelay = Math.max(...delays) + 800; // FIX: wait for slowest model + buffer
+
+    const synthCard = document.createElement('div');
+    synthCard.className = 'synthesis-card';
+    synthCard.style.animationDelay = '0s';
+    synthCard.style.opacity = '0';
+    synthCard.innerHTML = `
+      <div class="synthesis-header">
+        <div class="synthesis-icon">✦</div>
+        <div class="synthesis-title">Synthesis — Combined Intelligence</div>
+        <div class="thinking-badge" id="synth-think-${sid}">
+          <div class="thinking-dot"></div> synthesizing
+        </div>
+      </div>
+      <div id="synth-body-${sid}">
+        <div class="skeleton" style="height:14px;width:95%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:14px;width:85%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:14px;width:90%"></div>
+      </div>`;
+    resultsArea.appendChild(synthCard);
+
+    setTimeout(() => {
+      synthCard.style.opacity = '1';
+      synthCard.style.transition = 'opacity 0.5s ease';
+    }, 100);
+
+    setTimeout(() => {
+      const synthBody = document.getElementById('synth-body-' + sid);
+      const synthThink = document.getElementById('synth-think-' + sid);
+      if (!synthBody) return;
+
+      const synthKey = sampleKey || 'default';
+      const synthText = SYNTHESIS[synthKey] || SYNTHESIS['default'];
+
+      synthThink.innerHTML = '<span style="color:#40e060;font-size:0.65rem">✓ complete</span>';
+      synthBody.innerHTML = `<div class="synthesis-body">${renderMarkdown(synthText)}</div>`;
+      resultsArea.scrollTop = resultsArea.scrollHeight;
+    }, maxDelay);
+  }
+
+  // Re-enable after all responses land
+  const totalDelay = Math.max(...delays) + 500;
+  setTimeout(() => {
+    state.isRunning = false;
+    document.getElementById('fireBtn').disabled = false;
+    resultsArea.scrollTop = resultsArea.scrollHeight;
+  }, totalDelay);
+}
+
+// ============================================================
+// DEBATE MODE
+// ============================================================
+function runDebateMode(sid, activeModels, prompt, sampleResponses, resultsArea) {
+  const thread = document.createElement('div');
+  thread.className = 'debate-thread';
+  resultsArea.appendChild(thread);
+
+  let cumulativeDelay = 0;
+  const rounds = Math.min(activeModels.length, 4); // max 4 models in debate
+
+  for (let i = 0; i < rounds; i++) {
+    const m = activeModels[i % activeModels.length];
+    const delay = cumulativeDelay + 800 + Math.random() * 1200;
+    cumulativeDelay = delay;
+
+    const msg = document.createElement('div');
+    msg.className = 'debate-message';
+    msg.style.borderColor = m.color + '40';
+    msg.style.animationDelay = '9999s'; // start hidden
+    msg.innerHTML = `
+      <div class="debate-message-header" style="color:${m.color}">
+        ${m.icon} ${m.name} <span style="color:var(--muted);font-weight:400">· ${m.persona}</span>
+        <div class="thinking-badge" id="debate-think-${sid}-${i}" style="margin-left:auto">
+          <div class="thinking-dot"></div>
+        </div>
+      </div>
+      <div id="debate-body-${sid}-${i}">
+        <div class="skeleton" style="height:12px;width:85%;margin-bottom:6px"></div>
+        <div class="skeleton" style="height:12px;width:70%"></div>
+      </div>`;
+    thread.appendChild(msg);
+
+    setTimeout(() => {
+      msg.style.animationDelay = '0s';
+      msg.style.opacity = '1';
+      msg.style.transform = 'translateY(0)';
+      msg.style.transition = 'opacity 0.4s, transform 0.4s';
+    }, delay - 200);
+
+    setTimeout(() => {
+      const bodyEl = document.getElementById('debate-body-' + sid + '-' + i);
+      const thinkEl = document.getElementById('debate-think-' + sid + '-' + i);
+      if (!bodyEl) return;
+
+      const respText = (sampleResponses && sampleResponses[m.id])
+        || DEFAULT_RESPONSES[m.id]
+        || "Analyzing the previous points and adding my perspective...";
+
+      thinkEl.innerHTML = '';
+      if (i === 0) {
+        bodyEl.innerHTML = renderMarkdown(respText);
+      } else {
+        // Debate mode: prefix with a challenge
+        const challenges = ["I'd push back on that — ", "Building on that point: ", "A different angle: ", "Worth challenging that assumption — "];
+        const prefix = challenges[i % challenges.length];
+        bodyEl.innerHTML = renderMarkdown(prefix + respText.slice(0, 200) + '...');
+      }
+      resultsArea.scrollTop = resultsArea.scrollHeight;
+    }, delay);
+  }
+
+  setTimeout(() => {
+    state.isRunning = false;
+    document.getElementById('fireBtn').disabled = false;
+  }, cumulativeDelay + 500);
+}
+
+// ============================================================
+// MODAL HANDLING
+// ============================================================
+function openSettings() {
+  renderSettingsModal();
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+
+function handleModalClick(e) {
+  if (e.target === document.getElementById('settingsModal')) closeSettings();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderModelList();
+</script>
+</body>
+</html>
